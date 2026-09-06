@@ -13,7 +13,7 @@ from playsub.models import PlaybackState
 
 ORIGIN_HEADER = "https://open.spotify.com"
 SPOTIFY_PORTS = (4381, 4380, 4378, 4379)
-AD_TRACK_NAMES = {"advertisement", "ad", "spotify ad"}
+AD_TRACK_NAMES = {"advertisement", "ad", "spotify ad", "spotify"}
 
 
 @dataclass
@@ -123,14 +123,37 @@ class SpotifyPlayer:
             return None
 
     @staticmethod
-    def _looks_like_ad(track_name: str, artist_name: str, is_ad_flag: bool) -> bool:
+    def _looks_like_ad(
+        track_name: str,
+        artist_name: str,
+        spotify_url: str = "",
+        popularity: int | None = None,
+        duration_sec: float = 0.0,
+        is_ad_flag: bool = False,
+    ) -> bool:
         if is_ad_flag:
             return True
+
+        url_lower = spotify_url.lower()
+        if ":ad:" in url_lower or url_lower.startswith("spotify:ad"):
+            return True
+
         if track_name.strip().lower() in AD_TRACK_NAMES:
             return True
         if "advertisement" in track_name.lower():
             return True
-        return artist_name.strip().lower() in AD_TRACK_NAMES
+        if artist_name.strip().lower() in AD_TRACK_NAMES:
+            return True
+
+        # Short tracks named "Spotify" with zero popularity are usually ads.
+        if (
+            popularity == 0
+            and 0 < duration_sec <= 31
+            and track_name.strip().lower() in {"spotify", "advertisement"}
+        ):
+            return True
+
+        return False
 
     def _parse_status_json(self, status: dict) -> PlaybackState | None:
         track = status.get("track") or {}
@@ -140,7 +163,11 @@ class SpotifyPlayer:
         artists = track.get("artists") or []
         artist_name = artists[0]["name"] if artists else "Unknown Artist"
         track_name = track.get("name") or "Unknown Track"
-        is_ad = self._looks_like_ad(track_name, artist_name, bool(track.get("advertisement")))
+        is_ad = self._looks_like_ad(
+            track_name,
+            artist_name,
+            is_ad_flag=bool(track.get("advertisement")),
+        )
 
         if is_ad:
             track_name = "Advertisement"
@@ -174,13 +201,15 @@ class SpotifyPlayer:
 
         tell application "Spotify"
             try
+                set trackUrl to spotify url of current track
                 set trackName to name of current track
                 set artistName to artist of current track
                 set albumName to album of current track
+                set trackPop to popularity of current track
                 set pos to player position
                 set dur to (duration of current track) / 1000
                 set stateText to player state as string
-                return trackName & "|||" & artistName & "|||" & albumName & "|||" & pos & "|||" & dur & "|||" & stateText
+                return trackUrl & "|||" & trackName & "|||" & artistName & "|||" & albumName & "|||" & pos & "|||" & dur & "|||" & stateText & "|||" & trackPop
             on error errMsg number errNum
                 return "ERROR:" & errNum & ":" & errMsg
             end try
@@ -203,17 +232,24 @@ class SpotifyPlayer:
             return None
 
         parts = output.split("|||")
-        if len(parts) != 6:
+        if len(parts) != 8:
             return None
 
-        track_name, artist_name, album_name, pos_text, dur_text, state_text = parts
+        track_url, track_name, artist_name, album_name, pos_text, dur_text, state_text, pop_text = parts
         try:
             position_sec = float(pos_text)
             duration_sec = float(dur_text)
+            popularity = int(pop_text)
         except ValueError:
             return None
 
-        is_ad = SpotifyPlayer._looks_like_ad(track_name, artist_name, False)
+        is_ad = SpotifyPlayer._looks_like_ad(
+            track_name,
+            artist_name,
+            spotify_url=track_url,
+            popularity=popularity,
+            duration_sec=duration_sec,
+        )
         if is_ad:
             track_name = "Advertisement"
             artist_name = "Spotify"

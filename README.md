@@ -37,6 +37,42 @@ chmod +x scripts/install-autostart.sh
 
 This installs a background watcher. When Spotify opens, Playsub starts. When Spotify quits, Playsub stops.
 
+## Customize look and feel
+
+Press **⌘,** (Command + comma) while Playsub is focused to open settings.
+
+Or edit `~/.config/playsub/config.json` directly.
+
+### Theme presets
+
+| Preset | Vibe |
+|--------|------|
+| `minimal` | Soft white lyrics, no badge, no green/yellow (default) |
+| `cinema` | Just lyrics, very clean |
+| `classic` | Old colorful Spotify-style look |
+| `custom` | Your own colors and sizes |
+
+### Example config
+
+```json
+{
+  "window_opacity": 0.78,
+  "show_next_line": true,
+  "theme": {
+    "preset": "minimal",
+    "font_family": "Helvetica Neue",
+    "lyric_size": 22,
+    "lyric_color": "#f2f2f2",
+    "background": "#000000",
+    "show_badge": false,
+    "show_progress": false,
+    "show_status": true
+  }
+}
+```
+
+Copy `config.example.json` from the repo as a starting point.
+
 ## Config
 
 Optional file: `~/.config/playsub/config.json`

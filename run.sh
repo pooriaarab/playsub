@@ -22,4 +22,4 @@ fi
 
 source .venv/bin/activate
 pip install -q -r requirements.txt
-python main.py
+exec python "$(pwd)/main.py"

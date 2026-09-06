@@ -6,9 +6,15 @@ import threading
 import time
 
 from playsub.audio.muter import SpotifyAdMuter
-from playsub.config import load_config
+from playsub.config import ensure_example_config, load_config
 from playsub.lyrics.lrclib import LRCLibClient
-from playsub.lyrics.sync import line_at_position, line_progress, next_line_preview
+from playsub.lyrics.sync import (
+    karaoke_words_at_position,
+    line_at_position,
+    line_progress,
+    next_line_preview,
+)
+from playsub.menubar import MenuBarController
 from playsub.models import PlaybackState, TrackLyrics
 from playsub.overlay import PlaysubOverlay
 from playsub.players.spotify import SpotifyPlayer
@@ -24,11 +30,12 @@ def track_key(state: PlaybackState) -> str:
 
 class PlaysubApp:
     def __init__(self) -> None:
+        ensure_example_config()
         self.config = load_config()
-        self.overlay = PlaysubOverlay(opacity=self.config["window_opacity"])
+        self.overlay = PlaysubOverlay(config=self.config)
         self.player = SpotifyPlayer()
         self.lrclib = LRCLibClient()
-        self.ad_muter = SpotifyAdMuter()
+        self.ad_muter = SpotifyAdMuter(mode=self.config.get("ad_mute_mode", "both"))
 
         self.current_key = ""
         self.current_lyrics: TrackLyrics | None = None
@@ -36,16 +43,22 @@ class PlaysubApp:
         self.last_player_poll = 0.0
         self.loading = False
         self.fetching_key = ""
+        self.menubar: MenuBarController | None = None
 
     def start(self) -> None:
+        if self.config.get("menu_bar_icon", True):
+            self.menubar = MenuBarController(self)
         self.overlay.show_idle("Open Spotify and play a song")
         self.overlay.after(POLL_MS, self.tick)
+        if self.menubar is not None:
+            self.overlay.after(200, self.menubar.setup_on_main_thread)
         self.overlay.run()
 
     def tick(self) -> None:
         now = time.monotonic()
 
         if now - self.last_player_poll >= PLAYER_REFRESH_SEC:
+            self.config = load_config()
             playback = self.player.get_playback(now)
             self.last_player_poll = now
             if playback is not None:
@@ -58,6 +71,8 @@ class PlaysubApp:
         elif playback.is_ad:
             muted = False
             if self.config["mute_ads"]:
+                if self.ad_muter.mode != self.config.get("ad_mute_mode", "both"):
+                    self.ad_muter = SpotifyAdMuter(mode=self.config.get("ad_mute_mode", "both"))
                 muted = self.ad_muter.update(is_ad=True, is_playing=playback.is_playing)
             self.overlay.show_ad(muted=muted)
         else:
@@ -148,6 +163,9 @@ class PlaysubApp:
             else ""
         )
         progress = line_progress(self.current_lyrics, position_sec)
+        karaoke_words = None
+        if self.config.get("karaoke_mode", True) and self.current_lyrics.is_synced:
+            karaoke_words = karaoke_words_at_position(self.current_lyrics, position_sec)
 
         self.overlay.show_track(
             track=self.last_playback.track,
@@ -157,4 +175,5 @@ class PlaysubApp:
             progress=progress,
             synced=self.current_lyrics.is_synced,
             paused=paused,
+            karaoke_words=karaoke_words,
         )
