@@ -19,6 +19,8 @@ class PlaybackState:
 class LyricLine:
     start_sec: float
     text: str
+    # Optional real word timings: (word, start_sec, end_sec)
+    word_timings: tuple[tuple[str, float, float], ...] = ()
 
 
 @dataclass(frozen=True)
@@ -28,3 +30,4 @@ class TrackLyrics:
     lines: list[LyricLine]
     plain_text: str
     is_synced: bool
+    has_word_sync: bool = False

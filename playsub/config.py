@@ -16,6 +16,7 @@ DEFAULT_CONFIG: dict = {
     "auto_start_with_spotify": True,
     "show_next_line": True,
     "karaoke_mode": True,
+    "karaoke_offset_ms": 0,
     "menu_bar_icon": True,
     "window_opacity": 0.78,
     "theme": {
@@ -117,6 +118,27 @@ def _merge_theme(raw_theme: dict) -> dict:
     return base
 
 
+_CONFIG_CACHE: dict | None = None
+_CONFIG_MTIME: float | None = None
+
+
+def load_config_if_changed() -> dict:
+    """Reload config only when the file changed on disk."""
+    global _CONFIG_CACHE, _CONFIG_MTIME
+
+    try:
+        mtime = CONFIG_PATH.stat().st_mtime
+    except OSError:
+        return load_config()
+
+    if _CONFIG_CACHE is not None and _CONFIG_MTIME == mtime:
+        return _CONFIG_CACHE
+
+    _CONFIG_CACHE = load_config()
+    _CONFIG_MTIME = mtime
+    return _CONFIG_CACHE
+
+
 def load_config() -> dict:
     data: dict = {}
     if CONFIG_PATH.exists():
@@ -135,6 +157,7 @@ def load_config() -> dict:
         ),
         "show_next_line": bool(data.get("show_next_line", DEFAULT_CONFIG["show_next_line"])),
         "karaoke_mode": bool(data.get("karaoke_mode", DEFAULT_CONFIG["karaoke_mode"])),
+        "karaoke_offset_ms": float(data.get("karaoke_offset_ms", DEFAULT_CONFIG["karaoke_offset_ms"])),
         "menu_bar_icon": bool(data.get("menu_bar_icon", DEFAULT_CONFIG["menu_bar_icon"])),
         "window_opacity": float(data.get("window_opacity", DEFAULT_CONFIG["window_opacity"])),
         "theme": theme,
@@ -142,6 +165,8 @@ def load_config() -> dict:
 
 
 def save_config(config: dict) -> None:
+    global _CONFIG_CACHE, _CONFIG_MTIME
+
     CONFIG_DIR.mkdir(parents=True, exist_ok=True)
     payload = {
         "mute_ads": config.get("mute_ads", True),
@@ -149,11 +174,17 @@ def save_config(config: dict) -> None:
         "auto_start_with_spotify": config.get("auto_start_with_spotify", True),
         "show_next_line": config.get("show_next_line", True),
         "karaoke_mode": config.get("karaoke_mode", True),
+        "karaoke_offset_ms": float(config.get("karaoke_offset_ms", 0)),
         "menu_bar_icon": config.get("menu_bar_icon", True),
         "window_opacity": config.get("window_opacity", 0.78),
         "theme": config.get("theme", DEFAULT_CONFIG["theme"]),
     }
     CONFIG_PATH.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+    _CONFIG_CACHE = load_config()
+    try:
+        _CONFIG_MTIME = CONFIG_PATH.stat().st_mtime
+    except OSError:
+        _CONFIG_MTIME = None
 
 
 def ensure_example_config() -> None:

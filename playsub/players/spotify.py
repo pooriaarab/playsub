@@ -64,6 +64,12 @@ class SpotifyPlayer:
         return result.returncode == 0
 
     def _get_from_local_api(self) -> PlaybackState | None:
+        if self._active_port is not None:
+            status = self._fetch_status(self._active_port)
+            if status is not None:
+                return self._parse_status_json(status)
+            self._active_port = None
+
         for port in SPOTIFY_PORTS:
             status = self._fetch_status(port)
             if status is None:

@@ -4,6 +4,7 @@
   "auto_start_with_spotify": true,
   "show_next_line": true,
   "karaoke_mode": true,
+  "karaoke_offset_ms": 0,
   "menu_bar_icon": true,
   "window_opacity": 0.78,
   "theme": {

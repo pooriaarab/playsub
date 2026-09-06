@@ -52,6 +52,8 @@ class PlaysubOverlay:
 
         self._drag_offset_x = 0
         self._drag_offset_y = 0
+        self._draw_key: tuple | None = None
+        self._fonts: dict[tuple[str, bool], tkfont.Font] = {}
         self.canvas.bind("<ButtonPress-1>", self._start_drag)
         self.canvas.bind("<B1-Motion>", self._on_drag)
         self.root.bind("<Escape>", lambda _event: self.quit())
@@ -79,15 +81,27 @@ class PlaysubOverlay:
             pass
 
     def _make_font(self, size_key: str, bold: bool = False) -> tkfont.Font:
+        cache_key = (size_key, bold)
+        cached = self._fonts.get(cache_key)
+        if cached is not None:
+            return cached
+
         family = str(self.theme.get("font_family", "Helvetica Neue"))
         size = int(self.theme.get(size_key, 12))
         weight = "bold" if bold else "normal"
-        return tkfont.Font(family=family, size=size, weight=weight)
+        font = tkfont.Font(family=family, size=size, weight=weight)
+        self._fonts[cache_key] = font
+        return font
+
+    def _clear_font_cache(self) -> None:
+        self._fonts.clear()
 
     def apply_config(self, config: dict) -> None:
         self.config = config
         self.theme = dict(config["theme"])
         self.height = self._calc_height()
+        self._clear_font_cache()
+        self._draw_key = None
         self.root.configure(bg=self.theme["background"])
         self.canvas.configure(bg=self.theme["background"])
         self._apply_opacity()
@@ -121,9 +135,9 @@ class PlaysubOverlay:
     def _karaoke_color(self, state: str) -> str:
         if state == "active":
             return str(self.theme.get("karaoke_highlight_color", "#ffffff"))
-        if state == "past":
-            return str(self.theme.get("lyric_color", "#f2f2f2"))
-        return str(self.theme.get("next_color", "#5a5a5a"))
+        if state == "future":
+            return str(self.theme.get("next_color", "#5a5a5a"))
+        return str(self.theme.get("lyric_color", "#f2f2f2"))
 
     def _draw_karaoke_line(self, center_y: float, words: list[KaraokeWord]) -> None:
         if not words:
@@ -149,7 +163,27 @@ class PlaysubOverlay:
             self.canvas.create_text(x, center_y, text=text, anchor="w", fill=color, font=font)
             x += font.measure(text) + gap
 
+    def _current_draw_key(self) -> tuple:
+        karaoke_words = self._state.get("karaoke_words") or []
+        return (
+            self._state["mode"],
+            self._state["badge"],
+            self._state["status"],
+            self._state["line"],
+            self._state["next"],
+            round(float(self._state["progress"]), 2),
+            tuple((word.text, word.state) for word in karaoke_words),
+            self.height,
+            self.theme.get("preset"),
+            bool(self.config.get("karaoke_mode", True)),
+        )
+
     def _draw(self) -> None:
+        draw_key = self._current_draw_key()
+        if draw_key == self._draw_key:
+            return
+        self._draw_key = draw_key
+
         w, h = self.width, self.height
         bg = str(self.theme.get("background", "#000000"))
         self.canvas.delete("all")
@@ -300,10 +334,16 @@ class PlaysubOverlay:
         synced: bool,
         paused: bool = False,
         karaoke_words: list[KaraokeWord] | None = None,
+        word_sync: bool = False,
     ) -> None:
         status = ""
         if self.theme.get("show_status"):
-            sync_label = "synced" if synced else "estimated"
+            if synced and word_sync:
+                sync_label = "word sync"
+            elif synced:
+                sync_label = "line sync"
+            else:
+                sync_label = "estimated"
             prefix = "Paused · " if paused else ""
             status = f"{prefix}{track} — {artist} · {sync_label}"
 

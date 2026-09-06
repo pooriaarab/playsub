@@ -41,6 +41,17 @@ class SettingsWindow:
             fill="x", pady=(0, 12)
         )
 
+        self.offset_var = tk.IntVar(value=int(self.config.get("karaoke_offset_ms", 0)))
+        ttk.Label(frame, text="Karaoke timing offset (ms)").pack(anchor="w")
+        ttk.Label(
+            frame,
+            text="Negative = highlight earlier. Positive = later. Try -150 to +150.",
+            wraplength=360,
+        ).pack(anchor="w")
+        ttk.Scale(frame, from_=-500, to=500, variable=self.offset_var, orient="horizontal").pack(
+            fill="x", pady=(0, 12)
+        )
+
         self._add_entry(frame, "Font family", "font_family")
         self._add_spin(frame, "Lyric font size", "lyric_size", 12, 48)
         self._add_spin(frame, "Status font size", "status_size", 8, 24)
@@ -149,6 +160,7 @@ class SettingsWindow:
     def _save(self) -> None:
         updated = load_config()
         updated["window_opacity"] = float(self.opacity_var.get())
+        updated["karaoke_offset_ms"] = int(self.offset_var.get())
         updated["show_next_line"] = bool(self.bool_vars["show_next_line"].get())
         updated["karaoke_mode"] = bool(self.bool_vars["karaoke_mode"].get())
         updated["menu_bar_icon"] = bool(self.bool_vars["menu_bar_icon"].get())

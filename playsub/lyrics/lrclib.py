@@ -7,6 +7,7 @@ import re
 import urllib.parse
 import urllib.request
 
+from playsub.lyrics.sync import ENHANCED_WORD_TAG, prepare_track_lyrics
 from playsub.models import LyricLine, TrackLyrics
 
 LRCLIB_GET_URL = "https://lrclib.net/api/get"
@@ -48,12 +49,16 @@ class LRCLibClient:
         if synced:
             lines = self._parse_synced_lyrics(synced)
             if lines:
-                return TrackLyrics(
-                    track=track,
-                    artist=artist,
-                    lines=lines,
-                    plain_text=plain,
-                    is_synced=True,
+                has_word_sync = any(ENHANCED_WORD_TAG.search(line.text) for line in lines)
+                return prepare_track_lyrics(
+                    TrackLyrics(
+                        track=track,
+                        artist=artist,
+                        lines=lines,
+                        plain_text=plain,
+                        is_synced=True,
+                        has_word_sync=has_word_sync,
+                    )
                 )
 
         if plain:
